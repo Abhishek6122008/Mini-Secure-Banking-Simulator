@@ -1,0 +1,72 @@
+:root {
+  --bg: #f4f6fa;
+  --card: #ffffff;
+  --text: #1c2b3a;
+  --muted: #5d6b7a;
+  --accent: #2554c7;
+  --border: #d5dce6;
+  --good: #1d7a46;
+  --bad: #b3261e;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+body { margin: 0; }
+main { max-width: 34rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+}
+
+form { display: grid; gap: 0.75rem; }
+label { display: grid; gap: 0.3rem; font-size: 0.9rem; color: var(--muted); }
+input {
+  font: inherit;
+  color: var(--text);
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+button {
+  font: inherit;
+  padding: 0.55rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.6; cursor: progress; }
+button.secondary { background: transparent; color: var(--accent); }
+
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; }
+.tabs button { background: transparent; color: var(--accent); }
+.tabs button.active { background: var(--accent); color: #fff; }
+
+.row { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.balance { font-size: 2rem; font-weight: 600; margin-top: 0.75rem; }
+.muted { color: var(--muted); font-size: 0.85rem; }
+.error, .field-error { color: var(--bad); font-size: 0.85rem; margin: 0; }
+.success { color: var(--good); font-size: 0.9rem; margin: 0 0 0.5rem; }
+.notice { background: #fff4d6; border: 1px solid #e8cf86; border-radius: 6px; padding: 0.5rem 0.75rem; }
+
+.history { list-style: none; padding: 0; margin: 0 0 0.75rem; }
+.history li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.history li .muted { grid-column: 1 / -1; }
+.sent { color: var(--bad); }
+.received { color: var(--good); }

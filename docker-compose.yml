@@ -1,0 +1,16 @@
+# A local PostgreSQL for development and tests. Supabase is PostgreSQL too: for a real deployment, point the
+# server's DATABASE_URL at your Supabase project's connection string instead.
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: msbs
+      POSTGRES_PASSWORD: msbs-local-only
+      POSTGRES_DB: msbs
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U msbs -d msbs"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

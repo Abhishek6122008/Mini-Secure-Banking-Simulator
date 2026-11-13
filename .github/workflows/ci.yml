@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: msbs
+          POSTGRES_PASSWORD: msbs-ci-only
+          POSTGRES_DB: msbs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U msbs -d msbs"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: server
+    env:
+      TEST_ADMIN_URL: postgres://msbs:msbs-ci-only@localhost:5432/msbs
+      TEST_DATABASE_URL: postgres://msbs:msbs-ci-only@localhost:5432/msbs_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  client:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run build

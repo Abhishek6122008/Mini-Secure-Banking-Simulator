@@ -22,10 +22,14 @@ export function testApp(limits = {}) {
 
 // Registers and logs in a new user: every test works with its own accounts, so tests never share balances.
 export async function newUser(app, displayName = 'Test User', password = 'correct horse battery') {
-  const registered = await request(app).post('/api/auth/register').send({ displayName, password }).expect(201);
+  const username = `u_${randomUUID().replaceAll('-', '').slice(0, 20)}`;
+  const localPhone = `${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+  const phoneNumber = `+91${localPhone}`;
+  const registered = await request(app).post('/api/auth/register')
+    .send({ username, countryCode: '+91', phoneNumber: localPhone, displayName, password }).expect(201);
   const { accountId } = registered.body;
-  const login = await request(app).post('/api/auth/login').send({ accountId, password }).expect(200);
-  return { accountId, password, token: login.body.token, auth: { Authorization: `Bearer ${login.body.token}` } };
+  const login = await request(app).post('/api/auth/login').send({ identifier: accountId, password }).expect(200);
+  return { accountId, username, phoneNumber, password, token: login.body.token, auth: { Authorization: `Bearer ${login.body.token}` } };
 }
 
 export async function balanceOf(app, user) {
@@ -35,5 +39,5 @@ export async function balanceOf(app, user) {
 
 export function send(app, from, to, amount, requestKey = randomUUID()) {
   return request(app).post('/api/transfers').set(from.auth)
-    .send({ toAccountId: to.accountId, amount: String(amount), requestKey });
+    .send({ recipient: to.accountId, amount: String(amount), requestKey });
 }

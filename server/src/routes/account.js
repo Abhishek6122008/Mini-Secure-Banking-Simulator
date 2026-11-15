@@ -23,6 +23,7 @@ export function accountRoutes({ db }) {
       balance: accounts.balance,
       createdAt: accounts.createdAt,
       displayName: users.displayName,
+      phoneNumber: users.phoneNumber,
     }).from(accounts).innerJoin(users, eq(users.id, accounts.ownerUserId)).where(eq(accounts.ownerUserId, req.userId));
     if (!row) throw new HttpError(401, 'Invalid or expired session');
     res.json({ ...row, balance: row.balance.toString() });

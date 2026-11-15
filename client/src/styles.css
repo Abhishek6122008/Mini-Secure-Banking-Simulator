@@ -35,6 +35,21 @@ input {
   border-radius: 6px;
 }
 input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+select {
+  min-width: 0;
+  max-width: 12rem;
+  font: inherit;
+  color: var(--text);
+  padding: 0.55rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.phone-input { display: flex; align-items: center; gap: 0.4rem; }
+.phone-input .country-flag { font-size: 1.35rem; }
+.phone-input .calling-code { white-space: nowrap; color: var(--text); }
+.phone-input input { width: 100%; min-width: 0; }
 
 button {
   font: inherit;

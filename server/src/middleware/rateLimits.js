@@ -21,7 +21,7 @@ export function rateLimits(limits) {
     login: limiter(15 * MINUTE, limits.loginPer15Min),
     failedLogin: limiter(15 * MINUTE, limits.failedLoginsPer15Min, {
       skipSuccessfulRequests: true,
-      keyGenerator: (req) => `${ipKeyGenerator(req.ip)}:${String(req.body?.accountId ?? '').slice(0, 10)}`,
+      keyGenerator: (req) => `${ipKeyGenerator(req.ip)}:${String(req.body?.identifier ?? '').slice(0, 30)}`,
     }),
     // Per logged-in user (runs after requireAuth).
     transfer: limiter(MINUTE, limits.transfersPerMinute, { keyGenerator: (req) => req.userId }),

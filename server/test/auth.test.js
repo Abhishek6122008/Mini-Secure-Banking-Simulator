@@ -7,10 +7,10 @@ describe('registration and login', () => {
   const { app, pool } = testApp();
 
   it('gives a new user a unique 10-digit account ID and returns nothing else', async () => {
-    const a = await request(app).post('/api/auth/register').send({ displayName: 'Asha', password: 'pa55word!' });
-    const b = await request(app).post('/api/auth/register').send({ displayName: 'Asha', password: 'pa55word!' });
+    const a = await request(app).post('/api/auth/register').send({ username: 'asha1', countryCode: '+91', phoneNumber: '9876543210', displayName: 'Asha', password: 'pa55word!' });
+    const b = await request(app).post('/api/auth/register').send({ username: 'asha2', countryCode: '+91', phoneNumber: '9876543211', displayName: 'Asha', password: 'pa55word!' });
     expect(a.status).toBe(201);
-    expect(a.body).toEqual({ accountId: expect.stringMatching(/^[1-9][0-9]{9}$/) });
+    expect(a.body).toEqual({ accountId: expect.stringMatching(/^[1-9][0-9]{9}$/), username: 'asha1' });
     expect(b.body.accountId).not.toBe(a.body.accountId);
   });
 
@@ -23,12 +23,20 @@ describe('registration and login', () => {
     expect(rows[0].password_hash).not.toContain('my secret password');
   });
 
+  it('allows login with a username as well as the account ID', async () => {
+    const user = await newUser(app);
+    const login = await request(app).post('/api/auth/login').send({ identifier: user.username, password: user.password });
+    expect(login.status).toBe(200);
+    const byAccount = await request(app).post('/api/auth/login').send({ identifier: user.accountId, password: user.password });
+    expect(byAccount.status).toBe(200);
+  });
+
   it('gives the same generic error for a wrong password and for an account that does not exist', async () => {
     const user = await newUser(app);
     const wrongPassword = await request(app).post('/api/auth/login')
-      .send({ accountId: user.accountId, password: 'not the password' });
+      .send({ identifier: user.accountId, password: 'not the password' });
     const noSuchAccount = await request(app).post('/api/auth/login')
-      .send({ accountId: '1000000000', password: 'not the password' });
+      .send({ identifier: '1000000000', password: 'not the password' });
     expect(wrongPassword.status).toBe(401);
     expect(noSuchAccount.status).toBe(401);
     expect(wrongPassword.body).toEqual({ error: 'Invalid credentials' });
@@ -44,22 +52,22 @@ describe('registration and login', () => {
 
   it('rejects fields it does not expect, such as a starting balance', async () => {
     const res = await request(app).post('/api/auth/register')
-      .send({ displayName: 'Greedy', password: 'pa55word!', balance: '99999999' });
+      .send({ username: 'greedy', countryCode: '+91', phoneNumber: '9876543212', displayName: 'Greedy', password: 'pa55word!', balance: '99999999' });
     expect(res.status).toBe(400);
     expect(res.body.fields).toEqual({ balance: 'Unexpected field' });
   });
 
   it('enforces length limits and refuses oversized bodies', async () => {
     const longName = await request(app).post('/api/auth/register')
-      .send({ displayName: 'x'.repeat(51), password: 'pa55word!' });
+      .send({ username: 'longname', countryCode: '+91', phoneNumber: '9876543213', displayName: 'x'.repeat(51), password: 'pa55word!' });
     expect(longName.status).toBe(400);
     expect(longName.body.fields.displayName).toBe('Name must be at most 50 characters');
 
-    const shortPassword = await request(app).post('/api/auth/register').send({ displayName: 'A', password: 'short' });
+    const shortPassword = await request(app).post('/api/auth/register').send({ username: 'user1', countryCode: '+91', phoneNumber: '9876543214', displayName: 'A', password: 'short' });
     expect(shortPassword.body.fields.password).toBe('Password must be at least 8 characters');
 
     const huge = await request(app).post('/api/auth/register').set('Content-Type', 'application/json')
-      .send(JSON.stringify({ displayName: 'A', password: 'p'.repeat(20_000) }));
+      .send(JSON.stringify({ username: 'user1', countryCode: '+91', phoneNumber: '9876543214', displayName: 'A', password: 'p'.repeat(20_000) }));
     expect(huge.status).toBe(413);
   });
 

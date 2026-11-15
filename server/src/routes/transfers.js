@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { Router } from 'express';
 import { MAX_BALANCE } from '../config.js';
-import { accounts, transactions } from '../db/schema.js';
+import { accounts, transactions, users } from '../db/schema.js';
 import { HttpError } from '../errors.js';
 import { validateBody } from '../middleware/validate.js';
 import { transferSchema } from '../schemas.js';
@@ -16,11 +16,15 @@ function view(transfer, fromAccountId, toAccountId) {
 // Moves money between two accounts as one database transaction: lock both rows, check the funds, debit, credit and
 // record the transfer, or change nothing at all. The sender is the logged-in user, never a field in the body.
 // requestKey makes retries safe: the same key from the same sender returns the first transfer instead of a second one.
-export async function transfer(db, userId, { toAccountId, amount, requestKey }) {
+export async function transfer(db, userId, { recipient, amount, requestKey }) {
   const value = BigInt(amount);
   return db.transaction(async (tx) => {
     const sender = await ownAccount(tx, userId);
-    const [receiver] = await tx.select({ id: accounts.id }).from(accounts).where(eq(accounts.accountId, toAccountId));
+    const [receiver] = await tx.select({ id: accounts.id }).from(accounts)
+      .innerJoin(users, eq(users.id, accounts.ownerUserId))
+      .where(/^[1-9][0-9]{9}$/.test(recipient)
+        ? eq(accounts.accountId, recipient)
+        : eq(users.phoneNumber, recipient));
     if (!receiver) throw new HttpError(404, 'Receiver account not found');
     if (receiver.id === sender.id) throw new HttpError(400, 'You cannot transfer to your own account');
 
@@ -38,7 +42,7 @@ export async function transfer(db, userId, { toAccountId, amount, requestKey }) 
       if (previous.receiverAccountId !== to.id || previous.amount !== value) {
         throw new HttpError(409, 'This request key was already used for a different transfer');
       }
-      return { transfer: view(previous, from.accountId, toAccountId), replayed: true };
+      return { transfer: view(previous, from.accountId, to.accountId), replayed: true };
     }
 
     if (from.balance < value) throw new HttpError(422, 'Insufficient funds');
@@ -49,7 +53,7 @@ export async function transfer(db, userId, { toAccountId, amount, requestKey }) 
     const [created] = await tx.insert(transactions)
       .values({ senderAccountId: from.id, receiverAccountId: to.id, amount: value, requestKey })
       .returning();
-    return { transfer: view(created, from.accountId, toAccountId), replayed: false };
+    return { transfer: view(created, from.accountId, to.accountId), replayed: false };
   });
 }
 

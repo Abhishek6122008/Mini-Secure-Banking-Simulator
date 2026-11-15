@@ -19,6 +19,14 @@ describe('transfers', () => {
     expect(await balanceOf(app, ravi)).toBe(START + 12_345n);
   });
 
+  it('sends to a recipient by phone number', async () => {
+    const sender = await newUser(app);
+    const recipient = await newUser(app);
+    const result = await request(app).post('/api/transfers').set(sender.auth)
+      .send({ recipient: recipient.phoneNumber, amount: '500', requestKey: randomUUID() }).expect(201);
+    expect(result.body.transfer.toAccountId).toBe(recipient.accountId);
+  });
+
   it('refuses invalid amounts, including -500 and 999999999999999999, and changes nothing', async () => {
     const asha = await newUser(app);
     const ravi = await newUser(app);
@@ -29,7 +37,7 @@ describe('transfers', () => {
     }
     // Numbers are refused too: JavaScript would round large ones before the server ever saw them.
     const numeric = await request(app).post('/api/transfers').set(asha.auth)
-      .send({ toAccountId: ravi.accountId, amount: 500, requestKey: randomUUID() });
+      .send({ recipient: ravi.accountId, amount: 500, requestKey: randomUUID() });
     expect(numeric.status).toBe(400);
     expect(await balanceOf(app, asha)).toBe(START);
     expect(await balanceOf(app, ravi)).toBe(START);
@@ -48,7 +56,7 @@ describe('transfers', () => {
     const asha = await newUser(app);
     const ravi = await newUser(app);
     const res = await request(app).post('/api/transfers').set(asha.auth)
-      .send({ fromAccountId: ravi.accountId, toAccountId: asha.accountId, amount: '100', requestKey: randomUUID() });
+      .send({ fromAccountId: ravi.accountId, recipient: asha.accountId, amount: '100', requestKey: randomUUID() });
     expect(res.status).toBe(400);
     expect(res.body.fields).toEqual({ fromAccountId: 'Unexpected field' });
     expect(await balanceOf(app, ravi)).toBe(START);

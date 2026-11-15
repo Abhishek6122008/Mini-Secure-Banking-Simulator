@@ -10,6 +10,8 @@ import { MAX_BALANCE, MAX_TRANSFER } from '../config.js';
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   displayName: varchar('display_name', { length: 50 }).notNull(),
+  username: varchar('username', { length: 30 }).notNull().unique(),
+  phoneNumber: varchar('phone_number', { length: 16 }).unique(),
   passwordHash: text('password_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();

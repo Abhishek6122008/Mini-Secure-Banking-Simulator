@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import { formatPaise, toPaise } from './money.js';
+import { getCountries, getCountryCallingCode } from 'libphonenumber-js';
+
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+const countries = getCountries().map((code) => ({
+  code,
+  name: regionNames.of(code) || code,
+  callingCode: getCountryCallingCode(code),
+  flag: String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt(0))),
+})).sort((a, b) => a.name.localeCompare(b.name));
 
 // The token lives only in memory: closing or reloading the tab logs out, and no script can read it from storage.
 export default function App() {
@@ -33,9 +42,31 @@ function Field({ label, error, ...props }) {
   );
 }
 
+function PhoneNumberInput({ country, setCountry, value, onChange, error }) {
+  return (
+    <label>
+      Phone number
+      <div className="phone-input">
+        <span className="country-flag" aria-hidden="true">{countries.find((item) => item.code === country)?.flag}</span>
+        <select aria-label="Country calling code" value={country} onChange={(e) => setCountry(e.target.value)}>
+          {countries.map((item) => <option key={item.code} value={item.code}>
+            {item.flag} {item.name} (+{item.callingCode})
+          </option>)}
+        </select>
+        <span className="calling-code">+{getCountryCallingCode(country)}</span>
+        <input aria-label="10 digit phone number" type="tel" inputMode="numeric" autoComplete="tel-national"
+          value={value} onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+          maxLength={10} minLength={10} pattern="[0-9]{10}" placeholder="10 digit number" required />
+      </div>
+      {error && <span className="field-error">{error}</span>}
+    </label>
+  );
+}
+
 function AuthPanel({ onLogin }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ displayName: '', accountId: '', password: '' });
+  const [form, setForm] = useState({ displayName: '', username: '', phoneNumber: '', accountId: '', password: '' });
+  const [country, setCountry] = useState('IN');
   const [error, setError] = useState(null);
   const [created, setCreated] = useState('');
   const [busy, setBusy] = useState(false);
@@ -47,14 +78,15 @@ function AuthPanel({ onLogin }) {
     setError(null);
     try {
       if (mode === 'register') {
-        const { accountId } = await api('/auth/register', {
-          method: 'POST', body: { displayName: form.displayName, password: form.password } });
+        const { accountId, username } = await api('/auth/register', {
+          method: 'POST', body: { username: form.username, countryCode: `+${getCountryCallingCode(country)}`,
+            phoneNumber: form.phoneNumber, displayName: form.displayName, password: form.password } });
         setCreated(accountId);
-        setForm({ displayName: '', accountId, password: '' });
+        setForm({ displayName: '', username, phoneNumber: '', accountId, password: '' });
         setMode('login');
       } else {
         const { token } = await api('/auth/login', {
-          method: 'POST', body: { accountId: form.accountId, password: form.password } });
+          method: 'POST', body: { identifier: form.accountId, password: form.password } });
         onLogin(token);
       }
     } catch (err) {
@@ -73,14 +105,21 @@ function AuthPanel({ onLogin }) {
         </button>
       </div>
       {created && mode === 'login' && (
-        <p className="success">Account created. Your account ID is <strong>{created}</strong>: you log in with it.</p>
+        <p className="success">Account created. You can log in with your username or account ID. Account ID: <strong>{created}</strong>.</p>
       )}
       <form onSubmit={submit}>
         {mode === 'register'
-          ? <Field label="Your name" value={form.displayName} onChange={set('displayName')} maxLength={50} required
-              error={error?.fields?.displayName} />
-          : <Field label="Account ID" value={form.accountId} onChange={set('accountId')} maxLength={10}
-              inputMode="numeric" pattern="[0-9]{10}" required error={error?.fields?.accountId} />}
+          ? <>
+              <Field label="Username" value={form.username} onChange={set('username')} maxLength={30} minLength={3} required
+                autoComplete="username" error={error?.fields?.username} />
+              <PhoneNumberInput country={country} setCountry={setCountry} value={form.phoneNumber}
+                onChange={(phoneNumber) => setForm({ ...form, phoneNumber })}
+                error={error?.fields?.phoneNumber ?? error?.fields?.countryCode} />
+              <Field label="Your name" value={form.displayName} onChange={set('displayName')} maxLength={50} required
+                error={error?.fields?.displayName} />
+            </>
+          : <Field label="Username or account ID" value={form.accountId} onChange={set('accountId')} maxLength={30}
+              autoComplete="username" required error={error?.fields?.identifier} />}
         <Field label="Password" type="password" value={form.password} onChange={set('password')} maxLength={128}
           minLength={mode === 'register' ? 8 : 1} required error={error?.fields?.password}
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
@@ -151,7 +190,10 @@ function Dashboard({ token, onLogout }) {
 }
 
 function TransferForm({ call, onDone }) {
+  const [recipientType, setRecipientType] = useState('account');
   const [to, setTo] = useState('');
+  const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('IN');
   const [rupees, setRupees] = useState('');
   // One request key per intended transfer: a double click or a retry of the same transfer reuses it, so the server
   // processes it once. Editing the form starts a new transfer with a new key.
@@ -176,10 +218,12 @@ function TransferForm({ call, onDone }) {
     setBusy(true);
     setError(null);
     try {
-      const { transfer } = await call('/transfers', { method: 'POST', body: { toAccountId: to, amount, requestKey } });
+      const recipient = recipientType === 'phone' ? `+${getCountryCallingCode(country)}${phone}` : to;
+      const { transfer } = await call('/transfers', { method: 'POST', body: { recipient, amount, requestKey } });
       // Shown only once the server has confirmed the transfer was saved.
       setDone(`Sent ${formatPaise(transfer.amount)} to ${transfer.toAccountId}.`);
       setTo('');
+      setPhone('');
       setRupees('');
       setRequestKey(crypto.randomUUID());
       await onDone();
@@ -193,9 +237,30 @@ function TransferForm({ call, onDone }) {
   return (
     <section className="card">
       <h2>Send money</h2>
+      <div className="tabs recipient-tabs" role="tablist" aria-label="Choose how to find the recipient">
+        <button type="button" role="tab" aria-selected={recipientType === 'account'}
+          className={recipientType === 'account' ? 'active' : ''} onClick={() => {
+            setRecipientType('account'); setRequestKey(crypto.randomUUID()); setDone('');
+          }}>
+          Account number
+        </button>
+        <button type="button" role="tab" aria-selected={recipientType === 'phone'}
+          className={recipientType === 'phone' ? 'active' : ''} onClick={() => {
+            setRecipientType('phone'); setRequestKey(crypto.randomUUID()); setDone('');
+          }}>
+          Phone number
+        </button>
+      </div>
       <form onSubmit={submit}>
-        <Field label="Receiver's account ID" value={to} onChange={edit(setTo)} maxLength={10} inputMode="numeric"
-          pattern="[0-9]{10}" required error={error?.fields?.toAccountId} />
+        {recipientType === 'account'
+          ? <Field label="Receiver's account ID" value={to} onChange={edit(setTo)} maxLength={10} inputMode="numeric"
+              pattern="[0-9]{10}" required error={error?.fields?.recipient} />
+          : <PhoneNumberInput country={country} setCountry={(value) => {
+              setCountry(value); setRequestKey(crypto.randomUUID()); setDone('');
+            }} value={phone} onChange={(value) => {
+              setPhone(value); setRequestKey(crypto.randomUUID()); setDone('');
+            }}
+              error={error?.fields?.recipient} />}
         <Field label="Amount (₹)" value={rupees} onChange={edit(setRupees)} maxLength={9} inputMode="decimal" required
           error={error?.fields?.amount} />
         {error?.message && <p className="error">{error.message}</p>}

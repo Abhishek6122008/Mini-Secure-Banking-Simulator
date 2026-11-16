@@ -9,10 +9,10 @@ describe('rate limits', () => {
   it('stops password guessing after a few failures, even if the next guess is right', async () => {
     const user = await newUser(app);
     for (let i = 0; i < 3; i++) {
-      await request(app).post('/api/auth/login').send({ identifier: user.accountId, password: `guess ${i}` }).expect(401);
+      await request(app).post('/api/auth/login').send({ phoneNumber: user.phoneNumber, password: `guess ${i}` }).expect(401);
     }
     const blocked = await request(app).post('/api/auth/login')
-      .send({ identifier: user.accountId, password: user.password });
+      .send({ phoneNumber: user.phoneNumber, password: user.password });
     expect(blocked.status).toBe(429);
     expect(blocked.body).toEqual({ error: 'Too many requests, try again later' });
   });
@@ -20,7 +20,7 @@ describe('rate limits', () => {
   it('does not count successful logins as failures', async () => {
     const user = await newUser(app);
     for (let i = 0; i < 5; i++) {
-      await request(app).post('/api/auth/login').send({ identifier: user.accountId, password: user.password }).expect(200);
+      await request(app).post('/api/auth/login').send({ phoneNumber: user.phoneNumber, password: user.password }).expect(200);
     }
   });
 

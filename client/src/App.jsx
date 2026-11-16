@@ -65,7 +65,8 @@ function PhoneNumberInput({ country, setCountry, value, onChange, error }) {
 
 function AuthPanel({ onLogin }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ displayName: '', username: '', phoneNumber: '', accountId: '', password: '' });
+  const [loginMethod, setLoginMethod] = useState('phone');
+  const [form, setForm] = useState({ displayName: '', email: '', phoneNumber: '', password: '', accountId: '' });
   const [country, setCountry] = useState('IN');
   const [error, setError] = useState(null);
   const [created, setCreated] = useState('');
@@ -78,15 +79,20 @@ function AuthPanel({ onLogin }) {
     setError(null);
     try {
       if (mode === 'register') {
-        const { accountId, username } = await api('/auth/register', {
-          method: 'POST', body: { username: form.username, countryCode: `+${getCountryCallingCode(country)}`,
+        const { accountId } = await api('/auth/register', {
+          method: 'POST', body: { email: form.email, countryCode: `+${getCountryCallingCode(country)}`,
             phoneNumber: form.phoneNumber, displayName: form.displayName, password: form.password } });
         setCreated(accountId);
-        setForm({ displayName: '', username, phoneNumber: '', accountId, password: '' });
+        setForm({ displayName: '', email: '', phoneNumber: '', accountId: '', password: '' });
         setMode('login');
       } else {
         const { token } = await api('/auth/login', {
-          method: 'POST', body: { identifier: form.accountId, password: form.password } });
+          method: 'POST', body: {
+            ...(loginMethod === 'phone'
+              ? { phoneNumber: `+${getCountryCallingCode(country)}${form.phoneNumber}` }
+              : { accountId: form.accountId }),
+            password: form.password,
+          } });
         onLogin(token);
       }
     } catch (err) {
@@ -105,24 +111,46 @@ function AuthPanel({ onLogin }) {
         </button>
       </div>
       {created && mode === 'login' && (
-        <p className="success">Account created. You can log in with your username or account ID. Account ID: <strong>{created}</strong>.</p>
+        <p className="success">Account created. Log in with your phone number or account number. Account number: <strong>{created}</strong>.</p>
       )}
       <form onSubmit={submit}>
         {mode === 'register'
           ? <>
-              <Field label="Username" value={form.username} onChange={set('username')} maxLength={30} minLength={3} required
-                autoComplete="username" error={error?.fields?.username} />
+              <Field label="Email" type="email" value={form.email} onChange={set('email')} maxLength={254} required
+                autoComplete="email" placeholder="you@example.com" error={error?.fields?.email} />
               <PhoneNumberInput country={country} setCountry={setCountry} value={form.phoneNumber}
                 onChange={(phoneNumber) => setForm({ ...form, phoneNumber })}
                 error={error?.fields?.phoneNumber ?? error?.fields?.countryCode} />
               <Field label="Your name" value={form.displayName} onChange={set('displayName')} maxLength={50} required
-                error={error?.fields?.displayName} />
+                autoComplete="name" placeholder="Your full name" error={error?.fields?.displayName} />
             </>
-          : <Field label="Username or account ID" value={form.accountId} onChange={set('accountId')} maxLength={30}
-              autoComplete="username" required error={error?.fields?.identifier} />}
-        <Field label="Password" type="password" value={form.password} onChange={set('password')} maxLength={128}
-          minLength={mode === 'register' ? 8 : 1} required error={error?.fields?.password}
-          autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
+          : <>
+              <div className="tabs" role="tablist" aria-label="Choose login method">
+                <button type="button" role="tab" aria-selected={loginMethod === 'phone'}
+                  className={loginMethod === 'phone' ? 'active' : ''} onClick={() => setLoginMethod('phone')}>
+                  Phone number
+                </button>
+                <button type="button" role="tab" aria-selected={loginMethod === 'account'}
+                  className={loginMethod === 'account' ? 'active' : ''} onClick={() => setLoginMethod('account')}>
+                  Account number
+                </button>
+              </div>
+              {loginMethod === 'phone'
+                ? <PhoneNumberInput country={country} setCountry={setCountry} value={form.phoneNumber}
+                    onChange={(phoneNumber) => setForm({ ...form, phoneNumber })}
+                    error={error?.fields?.phoneNumber} />
+                : <Field label="Account number" value={form.accountId ?? ''} onChange={set('accountId')}
+                    maxLength={10} inputMode="numeric" pattern="[1-9][0-9]{9}" autoComplete="username"
+                    placeholder="10-digit account number" required error={error?.fields?.accountId} />}
+            </>}
+        <Field label="Password" type="password" value={form.password} onChange={set('password')} maxLength={16}
+          minLength={mode === 'register' ? 8 : 1} required
+          pattern={mode === 'register' ? '(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,128}' : undefined}
+          title={mode === 'register' ? 'Use 8 to 16 characters with uppercase and lowercase letters, a number, and a special symbol.' : undefined}
+          autoComplete={mode === 'register' ? 'new-password' : 'current-password'} placeholder={mode === 'register' ? 'Create a strong password' : 'Enter your password'}
+          error={error?.fields?.password}
+        />
+        {mode === 'register' && <p className="muted">Use 8 to 16 characters, including uppercase and lowercase letters, a number, and a special symbol.</p>}
         {error && !Object.keys(error.fields ?? {}).length && <p className="error">{error.message}</p>}
         <button type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Log in'}</button>
       </form>

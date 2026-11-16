@@ -2,11 +2,14 @@ import { z } from 'zod';
 import { HISTORY_MAX_PAGE, MAX_TRANSFER } from './config.js';
 
 const accountId = z.string().regex(/^[1-9][0-9]{9}$/, 'Account ID is 10 digits');
-const password = z.string().min(8, 'Password must be at least 8 characters').max(128, 'Password is too long');
+const password = z.string().min(8, 'Password must be at least 8 characters').max(16, 'Password must be at most 16 characters')
+  .regex(/[A-Z]/, 'Password must include at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must include at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must include at least one number')
+  .regex(/[^A-Za-z0-9]/, 'Password must include at least one special symbol');
 
 export const registerSchema = z.strictObject({
-  username: z.string().trim().toLowerCase().min(3, 'Username must be at least 3 characters').max(30, 'Username must be at most 30 characters')
-    .regex(/^[a-z0-9_]+$/, 'Use lowercase letters, numbers, and underscores'),
+  email: z.string().trim().toLowerCase().email('Enter a valid email address').max(254, 'Email must be at most 254 characters'),
   countryCode: z.string().regex(/^\+[1-9][0-9]{0,2}$/, 'Choose a valid country calling code'),
   phoneNumber: z.string().regex(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits'),
   displayName: z.string().trim()
@@ -16,10 +19,11 @@ export const registerSchema = z.strictObject({
   password,
 });
 
-export const loginSchema = z.strictObject({
-  identifier: z.string().trim().min(1, 'Username or account ID is required').max(30, 'Username or account ID is too long'),
-  password: z.string().min(1, 'Password is required').max(128, 'Password is too long'),
-});
+const loginPassword = z.string().min(1, 'Password is required').max(16, 'Password must be at most 16 characters');
+export const loginSchema = z.union([
+  z.strictObject({ phoneNumber: z.string().regex(/^\+[1-9][0-9]{9,14}$/, 'Enter a valid phone number with country code'), password: loginPassword }),
+  z.strictObject({ accountId: z.string().regex(/^[1-9][0-9]{9}$/, 'Account number must be 10 digits'), password: loginPassword }),
+]);
 
 // Amounts are whole paise as a decimal string: no sign, no fraction, no exponent, no leading zero, and at most the
 // transfer limit. So -500, 0, 12.5, 1e3 and 999999999999999999 are all refused, and nothing is ever rounded.

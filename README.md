@@ -1,6 +1,6 @@
 # Mini Secure Banking Simulator
 
-A small virtual-money bank built to practise secure coding. People register, log in with an account ID, see their
+A small virtual-money bank built to practise secure coding. People register, log in with their phone number, see their
 balance and history, and send money to other accounts. Every step is built around a known way banking apps go wrong:
 account guessing, other users' data, invalid amounts, duplicate clicks, half-finished transfers, leaked secrets.
 
@@ -30,7 +30,7 @@ nothing is ever rounded.
 
 | Requirement | How | Test (`server/test/`) |
 |---|---|---|
-| **Login** without guessable accounts | Random unique 10-digit account IDs. Passwords hashed with Argon2id. The same `Invalid credentials` for a wrong password and an unknown account, in about the same time (a dummy hash is checked when there is no account). | `auth.test.js` |
+| **Login** with phone or account number | Phone numbers are unique and stored with their country code. Passwords are 8–16 characters and hashed with Argon2id. The same `Invalid credentials` appears for a wrong password and an unknown number or account number, in about the same time (a dummy hash is checked when there is no user). | `auth.test.js` |
 | **Rate limiting** | Login: 20 per 15 min per address, and only 5 *failed* attempts per address and account. Registration: 10 per hour. Transfers: 10 per minute per user. | `rateLimits.test.js` |
 | **Privacy** of accounts and history | Private routes need a JWT. Its signature, `HS256` algorithm, issuer, audience and 15-minute expiry are all checked. Queries are keyed by the token's user ID; no route takes an account ID to read, and history shows the other side's account ID only. | `access.test.js` |
 | **Amount validation** | Whole paise as a string: no sign, fraction, exponent or leading zero, and at most ₹1,00,000. `-500`, `0`, `12.5`, `1e3` and `999999999999999999` are refused. Database `CHECK`s repeat the rules. | `transfers.test.js` |
@@ -71,8 +71,8 @@ migration. The app needs nothing Supabase-specific; Row Level Security keeps the
 
 | Method | Path | Auth | Body / query |
 |---|---|---|---|
-| `POST` | `/api/auth/register` | — | `{ displayName, password }` → `{ accountId }` |
-| `POST` | `/api/auth/login` | — | `{ accountId, password }` → `{ token, expiresIn }` |
+| `POST` | `/api/auth/register` | — | `{ email, countryCode, phoneNumber, displayName, password }` → `{ accountId }` |
+| `POST` | `/api/auth/login` | — | `{ phoneNumber: "+919876543210", password }` or `{ accountId, password }` → `{ token, expiresIn }` |
 | `GET` | `/api/account` | JWT | → `{ accountId, displayName, balance, createdAt }` |
 | `POST` | `/api/transfers` | JWT | `{ toAccountId, amount, requestKey }` → `{ transfer, replayed }` |
 | `GET` | `/api/transactions` | JWT | `?limit=1..50&before=<id>` → `{ items, nextCursor }` |

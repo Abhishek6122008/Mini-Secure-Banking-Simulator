@@ -1,6 +1,6 @@
 // Amounts travel as whole paise in decimal strings. These convert to and from rupees with string and BigInt
 // arithmetic only, so no amount ever passes through a floating-point number.
-const RUPEES = /^(\d{1,6})(?:\.(\d{1,2}))?$/;
+const RUPEES = /^(\d{1,10})(?:\.(\d{1,2}))?$/;
 
 export function toPaise(input) {
   const match = RUPEES.exec(input.trim());

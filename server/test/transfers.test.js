@@ -30,7 +30,7 @@ describe('transfers', () => {
   it('refuses invalid amounts, including -500 and 999999999999999999, and changes nothing', async () => {
     const asha = await newUser(app);
     const ravi = await newUser(app);
-    for (const amount of ['-500', '0', '999999999999999999', '12.5', '1e3', '007', ' 5', '', '10000001']) {
+    for (const amount of ['-500', '0', '999999999999999999', '12.5', '1e3', '007', ' 5', '', '100000000001']) {
       const res = await send(app, asha, ravi, amount);
       expect(res.status, `amount ${JSON.stringify(amount)}`).toBe(400);
       expect(res.body.fields.amount).toBeDefined();

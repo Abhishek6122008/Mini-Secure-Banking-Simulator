@@ -33,12 +33,12 @@ nothing is ever rounded.
 | **Login** with phone or account number | Phone numbers are unique and stored with their country code. Passwords are 8–16 characters and hashed with Argon2id. The same `Invalid credentials` appears for a wrong password and an unknown number or account number, in about the same time (a dummy hash is checked when there is no user). | `auth.test.js` |
 | **Rate limiting** | Login: 20 per 15 min per address, and only 5 *failed* attempts per address and account. Registration: 10 per hour. Transfers: 10 per minute per user. | `rateLimits.test.js` |
 | **Privacy** of accounts and history | Private routes need a JWT. Its signature, `HS256` algorithm, issuer, audience and 15-minute expiry are all checked. Queries are keyed by the token's user ID; no route takes an account ID to read, and history shows the other side's account ID only. | `access.test.js` |
-| **Amount validation** | Whole paise as a string: no sign, fraction, exponent or leading zero, and at most ₹1,00,000. `-500`, `0`, `12.5`, `1e3` and `999999999999999999` are refused. Database `CHECK`s repeat the rules. | `transfers.test.js` |
+| **Amount validation** | Whole paise as a string: no sign, fraction, exponent or leading zero, and no more than the sender's available balance. The transfer locks the sender account and checks the current balance before debiting; a database `CHECK` also forbids negative balances. | `transfers.test.js` |
 | **Consistent transfers, no duplicates** | One database transaction locks both accounts (in a fixed order, so there are no deadlocks), checks funds, debits, credits and records history. Any failure rolls all of it back. A client-generated `requestKey` is unique per sender, so a retry or double click returns the first transfer. The UI also disables the button while a transfer is being sent. | `transfers.test.js`: 20 simultaneous transfers from a balance that covers 10 succeed exactly 10 times; 10 copies of one request run once |
 | **Input limits** | `maxLength` on every input in React, the same limits again in Zod, strict schemas that reject unknown fields (`balance`, `fromAccountId`, …), and a 10 KB body limit. | `auth.test.js`, `transfers.test.js` |
 | **Database and secrets** | Parameterized queries through Drizzle only. Row Level Security on every table, with no policies, so Supabase's public API roles see nothing. The JWT secret and database URL live in server-side environment variables. | `transfers.test.js` (constraints hold even for direct SQL) |
 | **History and errors** | History rows are created inside the transfer and a trigger blocks `UPDATE`, `DELETE` and `TRUNCATE`. Users get generic errors; logs get the error name and code, never bodies, passwords, tokens or SQL text. | `transfers.test.js`, `auth.test.js` |
-| **Browser safety** | React renders all user input as text. The token is kept in memory only (no `localStorage`) and sent in a header, not a cookie, so there is no CSRF to defend. History is paged, 50 at most per request. | `access.test.js` (paging) |
+| **Browser safety** | React renders all user input as text. The short-lived token is kept in `sessionStorage` so refreshes in the same tab restore the session; it is sent in a header, not a cookie, so there is no CSRF to defend. History is paged, 50 at most per request. | `access.test.js` (paging) |
 
 ## Run it
 
@@ -74,13 +74,13 @@ migration. The app needs nothing Supabase-specific; Row Level Security keeps the
 | `POST` | `/api/auth/register` | — | `{ email, countryCode, phoneNumber, displayName, password }` → `{ accountId }` |
 | `POST` | `/api/auth/login` | — | `{ phoneNumber: "+919876543210", password }` or `{ accountId, password }` → `{ token, expiresIn }` |
 | `GET` | `/api/account` | JWT | → `{ accountId, displayName, balance, createdAt }` |
-| `POST` | `/api/transfers` | JWT | `{ toAccountId, amount, requestKey }` → `{ transfer, replayed }` |
+| `POST` | `/api/transfer` | JWT | `{ recipient, amount, requestKey }` → `{ transfer, replayed }` (`/api/transfers` remains a backwards-compatible alias) |
 | `GET` | `/api/transactions` | JWT | `?limit=1..50&before=<id>` → `{ items, nextCursor }` |
 
 ## Limits of this simulator
 
 - Rate limits are counted in memory, so they apply per server process; several instances would need a shared store
   such as Redis.
-- There are no refresh tokens. A session lasts 15 minutes, and reloading the page logs out.
+- There are no refresh tokens. A session lasts 15 minutes; reloading the page restores it in the same tab, and logging out or closing the tab clears the browser session.
 - Logging out clears the token in the browser; the token itself stays valid until it expires.
 - No administrator role, as designed: demo data is managed directly in the database.

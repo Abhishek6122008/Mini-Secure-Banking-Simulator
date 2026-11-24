@@ -11,14 +11,38 @@ const countries = getCountries().map((code) => ({
   flag: String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt(0))),
 })).sort((a, b) => a.name.localeCompare(b.name));
 
-// The token lives only in memory: closing or reloading the tab logs out, and no script can read it from storage.
+// Keep the short-lived token for this tab so a page refresh can restore the session.
+const SESSION_KEY = 'banking-session-token';
+
 export default function App() {
-  const [session, setSession] = useState(null);
+  const [session, setSession] = useState(() => {
+    try {
+      const token = sessionStorage.getItem(SESSION_KEY);
+      return token ? { token } : null;
+    } catch {
+      return null;
+    }
+  });
   const [notice, setNotice] = useState('');
 
   const logout = useCallback((message = '') => {
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // Storage may be unavailable; clearing in-memory state still logs out this view.
+    }
     setSession(null);
     setNotice(message);
+  }, []);
+
+  const login = useCallback((token) => {
+    try {
+      sessionStorage.setItem(SESSION_KEY, token);
+    } catch {
+      // Keep the session in memory if browser storage is unavailable.
+    }
+    setNotice('');
+    setSession({ token });
   }, []);
 
   return (
@@ -27,22 +51,25 @@ export default function App() {
       {notice && <p className="notice">{notice}</p>}
       {session
         ? <Dashboard token={session.token} onLogout={logout} />
-        : <AuthPanel onLogin={(token) => { setNotice(''); setSession({ token }); }} />}
+        : <AuthPanel onLogin={login} />}
     </main>
   );
 }
 
-function Field({ label, error, ...props }) {
+function Field({ label, error, hint, ...props }) {
   return (
     <label>
       {label}
       <input {...props} />
       {error && <span className="field-error">{error}</span>}
+      {hint && <span className="muted">{hint}</span>}
     </label>
   );
 }
 
 function PhoneNumberInput({ country, setCountry, value, onChange, error }) {
+  const [editing, setEditing] = useState(false);
+
   return (
     <label>
       Phone number
@@ -54,7 +81,8 @@ function PhoneNumberInput({ country, setCountry, value, onChange, error }) {
           </option>)}
         </select>
         <span className="calling-code">+{getCountryCallingCode(country)}</span>
-        <input aria-label="10 digit phone number" type="tel" inputMode="numeric" autoComplete="tel-national"
+        <input aria-label="10 digit phone number" type="tel" inputMode="numeric" autoComplete="off"
+          readOnly={!editing} onFocus={() => setEditing(true)}
           value={value} onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
           maxLength={10} minLength={10} pattern="[0-9]{10}" placeholder="10 digit number" required />
       </div>
@@ -66,6 +94,7 @@ function PhoneNumberInput({ country, setCountry, value, onChange, error }) {
 function AuthPanel({ onLogin }) {
   const [mode, setMode] = useState('login');
   const [loginMethod, setLoginMethod] = useState('phone');
+  const [accountIdEditing, setAccountIdEditing] = useState(false);
   const [form, setForm] = useState({ displayName: '', email: '', phoneNumber: '', password: '', accountId: '' });
   const [country, setCountry] = useState('IN');
   const [error, setError] = useState(null);
@@ -113,7 +142,7 @@ function AuthPanel({ onLogin }) {
       {created && mode === 'login' && (
         <p className="success">Account created. Log in with your phone number or account number. Account number: <strong>{created}</strong>.</p>
       )}
-      <form onSubmit={submit}>
+      <form onSubmit={submit} autoComplete="off">
         {mode === 'register'
           ? <>
               <Field label="Email" type="email" value={form.email} onChange={set('email')} maxLength={254} required
@@ -139,15 +168,18 @@ function AuthPanel({ onLogin }) {
                 ? <PhoneNumberInput country={country} setCountry={setCountry} value={form.phoneNumber}
                     onChange={(phoneNumber) => setForm({ ...form, phoneNumber })}
                     error={error?.fields?.phoneNumber} />
-                : <Field label="Account number" value={form.accountId ?? ''} onChange={set('accountId')}
-                    maxLength={10} inputMode="numeric" pattern="[1-9][0-9]{9}" autoComplete="username"
-                    placeholder="10-digit account number" required error={error?.fields?.accountId} />}
+                : <Field label="Account number" value={form.accountId ?? ''}
+                    onChange={(e) => setForm({ ...form, accountId: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    maxLength={10} inputMode="numeric" pattern="[1-9][0-9]{9}" autoComplete="off"
+                    readOnly={!accountIdEditing} onFocus={() => setAccountIdEditing(true)}
+                    placeholder="10-digit account number" required hint="You can only write numbers in this field."
+                    error={error?.fields?.accountId} />}
             </>}
         <Field label="Password" type="password" value={form.password} onChange={set('password')} maxLength={16}
           minLength={mode === 'register' ? 8 : 1} required
           pattern={mode === 'register' ? '(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,128}' : undefined}
           title={mode === 'register' ? 'Use 8 to 16 characters with uppercase and lowercase letters, a number, and a special symbol.' : undefined}
-          autoComplete={mode === 'register' ? 'new-password' : 'current-password'} placeholder={mode === 'register' ? 'Create a strong password' : 'Enter your password'}
+          autoComplete="off" placeholder={mode === 'register' ? 'Create a strong password' : 'Enter your password'}
           error={error?.fields?.password}
         />
         {mode === 'register' && <p className="muted">Use 8 to 16 characters, including uppercase and lowercase letters, a number, and a special symbol.</p>}
@@ -198,7 +230,7 @@ function Dashboard({ token, onLogout }) {
         </div>
         <div className="balance">{formatPaise(account.balance)}</div>
       </section>
-      <TransferForm call={call} onDone={refresh} />
+      <TransferForm call={call} onDone={refresh} balance={account.balance} />
       <section className="card">
         <h2>History</h2>
         {history.items.length === 0 && <p className="muted">No transfers yet.</p>}
@@ -217,9 +249,10 @@ function Dashboard({ token, onLogout }) {
   );
 }
 
-function TransferForm({ call, onDone }) {
+function TransferForm({ call, onDone, balance }) {
   const [recipientType, setRecipientType] = useState('account');
   const [to, setTo] = useState('');
+  const [accountIdEditing, setAccountIdEditing] = useState(false);
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('IN');
   const [rupees, setRupees] = useState('');
@@ -240,14 +273,22 @@ function TransferForm({ call, onDone }) {
     e.preventDefault();
     const amount = toPaise(rupees);
     if (!amount) {
-      setError({ fields: { amount: 'Enter an amount like 250 or 99.50' } });
+      setError({ fields: { amount: 'Invalid value. Enter a valid amount in rupees.' } });
+      return;
+    }
+    if (BigInt(amount) < 50_000n) {
+      setError({ fields: { amount: 'Minimum transfer amount is ₹500.' } });
+      return;
+    }
+    if (BigInt(amount) > BigInt(balance)) {
+      setError({ fields: { amount: 'Insufficient amount. This exceeds your available balance.' } });
       return;
     }
     setBusy(true);
     setError(null);
     try {
       const recipient = recipientType === 'phone' ? `+${getCountryCallingCode(country)}${phone}` : to;
-      const { transfer } = await call('/transfers', { method: 'POST', body: { recipient, amount, requestKey } });
+      const { transfer } = await call('/transfer', { method: 'POST', body: { recipient, amount, requestKey } });
       // Shown only once the server has confirmed the transfer was saved.
       setDone(`Sent ${formatPaise(transfer.amount)} to ${transfer.toAccountId}.`);
       setTo('');
@@ -256,7 +297,11 @@ function TransferForm({ call, onDone }) {
       setRequestKey(crypto.randomUUID());
       await onDone();
     } catch (err) {
-      setError(err);
+      if (err.message === 'Insufficient funds') {
+        setError({ fields: { amount: 'Insufficient amount. This exceeds your available balance.' } });
+      } else {
+        setError(err);
+      }
     } finally {
       setBusy(false);
     }
@@ -279,17 +324,20 @@ function TransferForm({ call, onDone }) {
           Phone number
         </button>
       </div>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} autoComplete="off">
         {recipientType === 'account'
-          ? <Field label="Receiver's account ID" value={to} onChange={edit(setTo)} maxLength={10} inputMode="numeric"
-              pattern="[0-9]{10}" required error={error?.fields?.recipient} />
+          ? <Field label="Receiver's account ID" value={to}
+              onChange={(e) => { setTo(e.target.value.replace(/\D/g, '').slice(0, 10)); setRequestKey(crypto.randomUUID()); setDone(''); }}
+              maxLength={10} inputMode="numeric" pattern="[0-9]{10}" autoComplete="off"
+              readOnly={!accountIdEditing} onFocus={() => setAccountIdEditing(true)} required
+              hint="You can only write numbers in this field." error={error?.fields?.recipient} />
           : <PhoneNumberInput country={country} setCountry={(value) => {
               setCountry(value); setRequestKey(crypto.randomUUID()); setDone('');
             }} value={phone} onChange={(value) => {
               setPhone(value); setRequestKey(crypto.randomUUID()); setDone('');
             }}
               error={error?.fields?.recipient} />}
-        <Field label="Amount (₹)" value={rupees} onChange={edit(setRupees)} maxLength={9} inputMode="decimal" required
+        <Field label={`Amount (₹) — minimum ₹500, available ${formatPaise(balance)}`} value={rupees} onChange={edit(setRupees)} maxLength={13} inputMode="decimal" required
           error={error?.fields?.amount} />
         {error?.message && <p className="error">{error.message}</p>}
         {done && <p className="success">{done}</p>}

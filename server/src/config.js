@@ -1,7 +1,9 @@
 // Money is stored as whole paise (1 rupee = 100 paise) in BIGINT columns and sent over JSON as decimal strings, so
 // neither the database nor JavaScript ever rounds an amount.
-export const MAX_TRANSFER = 10_000_000n; // ₹1,00,000.00 per transfer
 export const MAX_BALANCE = 100_000_000_000n; // ₹1,00,00,00,000.00 per account
+// A transfer can use the full account balance; the sender's locked balance is the effective limit.
+export const MAX_TRANSFER = MAX_BALANCE;
+export const MIN_TRANSFER = 50_000n; // â‚¹500.00
 export const STARTING_BALANCE = 1_000_000n; // ₹10,000.00 of virtual money for every new account
 export const HISTORY_MAX_PAGE = 50;
 

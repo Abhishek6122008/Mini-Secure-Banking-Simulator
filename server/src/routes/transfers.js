@@ -59,7 +59,8 @@ export async function transfer(db, userId, { recipient, amount, requestKey }) {
 
 export function transferRoutes({ db, limits }) {
   const router = Router();
-  router.post('/transfers', limits.transfer, validateBody(transferSchema), async (req, res) => {
+  // Keep the plural path as a backwards-compatible alias while exposing the singular API path.
+  router.post(['/transfer', '/transfers'], limits.transfer, validateBody(transferSchema), async (req, res) => {
     let result;
     try {
       result = await transfer(db, req.userId, req.body);

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { HISTORY_MAX_PAGE, MAX_TRANSFER } from './config.js';
+import { HISTORY_MAX_PAGE, MAX_TRANSFER, MIN_TRANSFER } from './config.js';
 
 const accountId = z.string().regex(/^[1-9][0-9]{9}$/, 'Account ID is 10 digits');
 const password = z.string().min(8, 'Password must be at least 8 characters').max(16, 'Password must be at most 16 characters')
@@ -34,6 +34,7 @@ export const transferSchema = z.strictObject({
   amount: z.string()
     .regex(WHOLE_PAISE, 'Amount must be a whole number of paise, greater than 0')
     // Zod 4 runs this even when the regex failed, so it must not assume a valid number (BigInt('12.5') throws).
+    .refine((v) => !WHOLE_PAISE.test(v) || BigInt(v) >= MIN_TRANSFER, 'Minimum transfer amount is â‚¹500')
     .refine((v) => !WHOLE_PAISE.test(v) || BigInt(v) <= MAX_TRANSFER, `Amount must be at most ${MAX_TRANSFER} paise`),
   requestKey: z.uuid('Request key must be a UUID'),
 });
